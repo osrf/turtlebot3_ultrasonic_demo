@@ -1,0 +1,6 @@
+image: /home/ahcorde/turtlebot3_ultrasonic_demo_ws//map.pgm
+resolution: 0.0050000
+origin: [-1,-1, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
