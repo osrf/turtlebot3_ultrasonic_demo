@@ -6,6 +6,42 @@ from sensor_msgs.msg import Range
 
 import threading
 
+import time
+
+class PID:
+    def __init__(self, Kp, Td, Ti):
+        self.Kp = Kp
+        self.Td = Td
+        self.Ti = Ti
+        self.curr_error = 0
+        self.prev_error = 0
+        self.sum_error = 0
+        self.prev_error_deriv = 0
+        self.curr_error_deriv = 0
+        self.control = 0
+
+    def update_control(self, current_error, dt, reset_prev=False):
+        self.curr_error_deriv = (self.curr_error - self.prev_error) / dt
+
+        #steering angle = P gain + D gain + I gain
+        p_gain = self.Kp * self.curr_error
+
+        i_gain = self.sum_error  + self.Ti * self.curr_error * dt
+        self.sum_error = i_gain
+        d_gain = self.Td * self.curr_error_deriv
+
+        #PID control
+        w = p_gain + d_gain + i_gain # = control?
+        self.control = w
+
+        # update error
+        self.prev_error = self.curr_error
+        self.curr_error = current_error
+        self.prev_error_deriv = self.curr_error_deriv
+        #print("control", self.control)
+        return self.control
+
+
 class WallFollow:
     def __init__( self ):
         self.velpub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
@@ -19,8 +55,8 @@ class WallFollow:
         self.ultrasonic_left = 0.12
 
         t = threading.Thread(target=self.thread_function)
-        self.mode = False # True - following, False - picking behavior
-        self.wall = -1 #-1 - no wall, 1 - left, 2 - right
+        self.pid = PID(3, 10.0, 0.15)
+        self.start = time.clock()
 
     def thread_function(self):
         rclpy.spin()
@@ -35,15 +71,17 @@ class WallFollow:
             L = data[1] < 0.3
             R = data[2] < 0.3
 
-            # derecha negativo
-
+            end = time.clock()
             target_left_distance = 0.3
-            diff_with_target_distance = (self.ultrasonic_left - target_left_distance)*2
+            diff_with_target_distance = (self.ultrasonic_left - target_left_distance)
+            angle = self.pid.update_control(diff_with_target_distance, end - self.start)
+
+            self.start = end
 
             if(not F):
-                self.move(0.1, diff_with_target_distance, 0)
+                self.move(0.1, angle, 0)
             else:
-                self.move(0.0, -0.2, 0)
+                self.move(0.0, -0.3, 0)
 
 
     def move(self, lin_vel, ang_vel, dur ):
